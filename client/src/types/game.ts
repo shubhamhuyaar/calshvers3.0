@@ -4,26 +4,13 @@ export interface Player {
   language: string;
   codeLength?: number;
   elo?: number;
-  rating?: number;
-  progress?: number;
-}
-
-export interface TestCase {
-  input: string;
-  expectedOutput: string;
-  isHidden: boolean;
 }
 
 export interface Problem {
   id: string;
   title: string;
   description: string;
-  difficulty: 'easy' | 'medium' | 'hard';
-  constraints: string[];
-  testCases: TestCase[];
-  starterCode: {
-    [key: string]: string;
-  };
+  examples: string;
 }
 
 export interface RevealedPlayer {
@@ -69,27 +56,4 @@ export interface ChatMessage {
   timestamp: number;
 }
 
-export type GameStatus = 'idle' | 'waiting' | 'active' | 'completed' | 'revealed';
-
-export enum BattleStatus {
-  IDLE = 'idle',
-  SEARCHING = 'searching',
-  MATCHED = 'matched',
-  IN_PROGRESS = 'in_progress',
-  FINISHED = 'finished'
-}
-
-export interface BattleResult {
-  passed: number;
-  total: number;
-  executionTime: number;
-  normalizedExecutionTime: number;
-  completionTime: number;
-  normalizedCompletionTime: number;
-  complexity: string;
-  complexityScore: number;
-  code: string;
-  accuracy: number;
-  precision: number;
-  recall: number;
-}
+export type GameStatus = 'idle' | 'waiting' | 'active' | 'revealed';

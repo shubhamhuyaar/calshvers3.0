@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
-import type { RoomJoinedPayload, MatchStartPayload, OpponentCodeLengthPayload, RevealPayload, ChatMessage, Problem, Player, GameStatus, BattleResult } from '@/types/game';
+import type { RoomJoinedPayload, MatchStartPayload, OpponentCodeLengthPayload, RevealPayload, ChatMessage, Problem, Player, GameStatus } from '@/types/game';
 
 const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001';
 
@@ -15,39 +15,34 @@ export interface GameState {
   myUsername: string | null;
   players: Player[];
   opponentCodeLength: number;
-  opponentProgress: number; 
-  myProgress: number;       
   revealData: RevealPayload | null;
   eloDeltas?: Record<string, number>;
   chatMessages: ChatMessage[];
   errorMessage: string | null;
   isRateLimited: boolean;
+  // Timer
   matchDuration: number;
   matchStartedAt: number | null;
+  // Draw
   drawPending: boolean;
   drawRequesterName: string | null;
+  // Finish Early
   finishPending: boolean;
   finishRequesterName: string | null;
+  // AI
   aiEvaluating: boolean;
   drawAttempts: number;
-  myLanguage: string;
-  myResult: BattleResult | null;
-  opponentResult: BattleResult | null;
 }
 
 const initialState: GameState = {
   status: 'idle', roomId: null, matchId: null, problem: null,
   myUserId: null, myUsername: null, players: [], opponentCodeLength: 0,
-  opponentProgress: 0, myProgress: 0,
   revealData: null, eloDeltas: undefined, chatMessages: [], errorMessage: null, isRateLimited: false,
   matchDuration: 15 * 60 * 1000, matchStartedAt: null,
   drawPending: false, drawRequesterName: null, 
   finishPending: false, finishRequesterName: null,
   aiEvaluating: false,
   drawAttempts: 0,
-  myLanguage: 'python',
-  myResult: null,
-  opponentResult: null,
 };
 
 export function useSocket() {
@@ -60,55 +55,29 @@ export function useSocket() {
   }, []);
 
   useEffect(() => {
-    // Handshake configuration
     const socket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
-      reconnection: true, 
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000, 
-      reconnectionDelayMax: 5000,
-      withCredentials: true // match backend CORS
+      reconnection: true, reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000, reconnectionDelayMax: 5000,
     });
     socketRef.current = socket;
 
-    socket.on('connect', () => {
-        setConnected(true);
-        console.log("[socket] Connected to Monolith Node");
-    });
+    socket.on('connect', () => setConnected(true));
     socket.on('disconnect', () => setConnected(false));
 
     socket.on('room_joined', (p: RoomJoinedPayload) => {
-      update({ 
-        status: p.status === 'active' ? 'active' : 'waiting', 
-        roomId: p.roomId, 
-        matchId: p.matchId, 
-        problem: p.problem, 
-        players: p.players, 
-        errorMessage: null 
-      });
+      update({ status: p.status === 'active' ? 'active' : 'waiting', roomId: p.roomId, matchId: p.matchId, problem: p.problem, players: p.players, errorMessage: null });
     });
 
+    socket.on('waiting_for_opponent', () => update({ status: 'waiting' }));
+
     socket.on('match_start', (p: MatchStartPayload & { duration: number; startedAt: number }) => {
-      update({ 
-        status: 'active', 
-        problem: p.problem, 
-        players: p.players, 
-        matchDuration: p.duration, 
-        matchStartedAt: p.startedAt 
-      });
+      update({ status: 'active', problem: p.problem, players: p.players, matchDuration: p.duration, matchStartedAt: p.startedAt });
     });
 
     socket.on('opponent_code_length', (p: OpponentCodeLengthPayload) => {
       update({ opponentCodeLength: p.codeLength });
       setGameState(prev => ({ ...prev, players: prev.players.map(pl => pl.userId === p.userId ? { ...pl, codeLength: p.codeLength, language: p.language } : pl) }));
-    });
-
-    socket.on('progress_updated', ({ userId, progress }: { userId: string; progress: number }) => {
-      update({ opponentProgress: progress });
-    });
-
-    socket.on('match_end_timer', () => {
-      update({ status: 'completed', aiEvaluating: true });
     });
 
     socket.on('reveal', (p: RevealPayload) => update({ status: 'revealed', revealData: p, eloDeltas: p.eloDeltas, aiEvaluating: false }));
@@ -166,18 +135,13 @@ export function useSocket() {
 
   const joinRoom = useCallback((roomId: string, userId: string, username: string, language = 'javascript') => {
     if (!socketRef.current?.connected) return;
-    update({ myUserId: userId, myUsername: username, myLanguage: language });
+    update({ myUserId: userId, myUsername: username });
     socketRef.current.emit('join_room', { roomId, userId, username, language });
   }, [update]);
 
   const sendCodeUpdate = useCallback((code: string, language: string) => {
     socketRef.current?.emit('code_update', { code, language });
   }, []);
-
-  const sendProgressUpdate = useCallback((roomId: string, userId: string, progress: number) => {
-    update({ myProgress: progress });
-    socketRef.current?.emit('update_progress', { roomId, userId, progress });
-  }, [update]);
 
   const requestDraw = useCallback(() => {
     setGameState(prev => {
@@ -204,5 +168,5 @@ export function useSocket() {
 
   const resetGame = useCallback(() => setGameState(initialState), []);
 
-  return { connected, gameState, joinRoom, sendCodeUpdate, sendProgressUpdate, requestDraw, confirmDraw, rejectDraw, requestFinish, confirmFinish, rejectFinish, sendChat, resetGame, update };
+  return { connected, gameState, joinRoom, sendCodeUpdate, requestDraw, confirmDraw, rejectDraw, requestFinish, confirmFinish, rejectFinish, sendChat, resetGame };
 }

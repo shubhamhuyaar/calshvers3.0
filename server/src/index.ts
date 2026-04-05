@@ -27,25 +27,6 @@ interface PlayerState {
   updateCount: number;
   windowStart: number;
   drawAttempts: number;
-  testCaseProgress: number; // 0.0 to 1.0 (or total count)
-}
-
-interface TestCase {
-  input: string;
-  expectedOutput: string;
-  isHidden: boolean;
-}
-
-interface Problem {
-  id: string;
-  title: string;
-  description: string;
-  difficulty: 'easy' | 'medium' | 'hard';
-  constraints: string[];
-  testCases: TestCase[];
-  starterCode: {
-    [key: string]: string;
-  };
 }
 
 interface Room {
@@ -55,7 +36,7 @@ interface Room {
   creatorElo: number;
   eloRange: number;
   eloExpandTimer?: ReturnType<typeof setInterval>;
-  problem: Problem;
+  problem: { id: string; title: string; description: string; examples: string };
   players: Map<string, PlayerState>;
   status: "waiting" | "active" | "completed";
   createdAt: number;
@@ -81,89 +62,23 @@ const ELO_MAX_RANGE = 600;
 
 // ── Problems ───────────────────────────────────────────────────────────────
 
-const PROBLEMS: Problem[] = [
-  { 
-    id: "two-sum", 
-    title: "Two Sum", 
-    description: "Given an array of integers `nums` and an integer `target`, return indices of the two numbers such that they add up to target. You may assume exactly one solution exists.",
-    difficulty: 'easy',
-    constraints: [
-      '2 <= nums.length <= 10^4',
-      '-10^9 <= nums[i] <= 10^9',
-      'Only one valid answer exists.'
-    ],
-    testCases: [
-      { input: 'nums = [2,7,11,15], target = 9', expectedOutput: '[0,1]', isHidden: false },
-      { input: 'nums = [3,2,4], target = 6', expectedOutput: '[1,2]', isHidden: false },
-      { input: 'nums = [3,3], target = 6', expectedOutput: '[0,1]', isHidden: true }
-    ],
-    starterCode: {
-      python: 'def solve(nums, target):\n    # YOUR LOGIC\n    pass',
-      javascript: 'function solve(nums, target) {\n    // YOUR LOGIC\n}',
-      cpp: 'vector<int> solve(vector<int>& nums, int target) {\n    // YOUR LOGIC\n}'
-    }
-  },
-  { 
-    id: "fizzbuzz", 
-    title: "FizzBuzz", 
-    description: 'Given an integer n, return a string array where answer[i] is "FizzBuzz" if divisible by 3 and 5, "Fizz" if by 3, "Buzz" if by 5, otherwise the number as a string.',
-    difficulty: 'easy',
-    constraints: [
-      '1 <= n <= 10^4'
-    ],
-    testCases: [
-      { input: 'n = 3', expectedOutput: '["1","2","Fizz"]', isHidden: false },
-      { input: 'n = 5', expectedOutput: '["1","2","Fizz","4","Buzz"]', isHidden: false }
-    ],
-    starterCode: {
-      python: 'def solve(n):\n    # YOUR LOGIC\n    pass',
-      javascript: 'function solve(n) {\n    // YOUR LOGIC\n}'
-    }
-  },
-  { 
-    id: "bitwise-inversion", 
-    title: "Bitwise Parity Inversion", 
-    description: 'IMPLEMENT A FUNCTION THAT ACCEPTS AN ARRAY OF INTEGERS. FOR EACH ELEMENT, IF THE COUNT OF SET BITS IS EVEN, INVERT ALL BITS. RETURN THE MODIFIED ARRAY.',
-    difficulty: 'medium',
-    constraints: [
-      'ARRAY SIZE <= 10^5',
-      'INT RANGE [-2^31, 2^31 - 1]',
-      'TIME LIMIT 1.0S'
-    ],
-    testCases: [
-      { input: '[1, 2, 3]', expectedOutput: '[-2, -3, 3]', isHidden: false },
-      { input: '[7, 15, 0]', expectedOutput: '[7, 15, -1]', isHidden: true }
-    ],
-    starterCode: {
-      python: 'def solve(arr):\n    # YOUR LOGIC\n    pass',
-      javascript: 'function solve(arr) {\n    // YOUR LOGIC\n}'
-    }
-  }
+const PROBLEMS = [
+  { id: "two-sum", title: "Two Sum", description: "Given an array of integers `nums` and an integer `target`, return indices of the two numbers such that they add up to target. You may assume exactly one solution exists.", examples: "Input: nums = [2,7,11,15], target = 9\nOutput: [0,1]\n\nInput: nums = [3,2,4], target = 6\nOutput: [1,2]" },
+  { id: "reverse-string", title: "Reverse String", description: "Write a function that reverses a string. The input string is given as an array of characters `s`. Modify the input array in-place with O(1) extra memory.", examples: 'Input: s = ["h","e","l","l","o"]\nOutput: ["o","l","l","e","h"]' },
+  { id: "fizzbuzz", title: "FizzBuzz", description: 'Given an integer n, return a string array where answer[i] is "FizzBuzz" if divisible by 3 and 5, "Fizz" if by 3, "Buzz" if by 5, otherwise the number as a string.', examples: 'Input: n = 5\nOutput: ["1","2","Fizz","4","Buzz"]' },
+  { id: "palindrome", title: "Valid Palindrome", description: "A phrase is a palindrome if, after removing non-alphanumeric chars and lowercasing, it reads the same forward and backward. Return true/false.", examples: 'Input: s = "A man, a plan, a canal: Panama"\nOutput: true' },
+  { id: "max-subarray", title: "Maximum Subarray", description: "Given an integer array nums, find the subarray with the largest sum and return its sum.", examples: "Input: nums = [-2,1,-3,4,-1,2,1,-5,4]\nOutput: 6" },
 ];
 
 // ── Server ─────────────────────────────────────────────────────────────────
 
 const app = express();
-
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:3000";
-
-app.use(cors({ 
-  origin: CLIENT_ORIGIN,
-  credentials: true 
-}));
-
+app.use(cors({ origin: process.env.CLIENT_ORIGIN || "http://localhost:3000" }));
 app.use(express.json());
-
-// Root health check for Render/Fly.io verification
-app.get("/", (_, res) => res.send("🚀 CodeWars Monolith Server: ONLINE"));
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: { 
-    origin: CLIENT_ORIGIN, 
-    methods: ["GET", "POST"],
-    credentials: true
-  },
+  cors: { origin: process.env.CLIENT_ORIGIN || "http://localhost:3000", methods: ["GET", "POST"] },
 });
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -496,6 +411,151 @@ app.get("/matches/:userId", async (req, res) => {
   }
 });
 
+// ── HUB (Nodes) ────────────────────────────────────────────────────────────
+
+/** Get all active nodes (Directory) */
+app.get("/api/nodes", async (req, res) => {
+  const { userId } = req.query;
+  try {
+    const { data: nodes, error } = await supabase.from("nodes").select("id, name, created_at, code").order("created_at", { ascending: false });
+    if (error) { res.status(500).json({ error: error.message }); return; }
+
+    let memberships: any[] = [];
+    if (userId) {
+      const { data: mems } = await supabase.from("node_memberships").select("node_id").eq("user_id", userId);
+      memberships = mems || [];
+    }
+    const memSet = new Set(memberships.map((m: any) => m.node_id));
+
+    const enriched = (nodes ?? []).map((n: any) => ({
+      id: n.id,
+      name: n.name,
+      created_at: n.created_at,
+      isMember: memSet.has(n.id),
+      code: memSet.has(n.id) ? n.code : undefined
+    }));
+
+    res.json(enriched);
+  } catch {
+    res.status(500).json({ error: "Failed to fetch Nodes" });
+  }
+});
+
+/** Create a new Node */
+app.post("/api/nodes/create", async (req, res) => {
+  const { userId, code, name } = req.body;
+  if (!userId || !code || !name) { res.status(400).json({ error: "Missing fields" }); return; }
+  try {
+    const codeUpper = code.toUpperCase();
+    const { data: newNode, error: createError } = await supabase.from("nodes")
+      .insert({ code: codeUpper, name, description: "Encrypted Local Network" })
+      .select().single();
+    if (createError || !newNode) { res.status(500).json({ error: "Failed to initialize Node. Integrity error." }); return; }
+    
+    await supabase.from("node_memberships").insert({ node_id: newNode.id, user_id: userId, role: "ADMIN" });
+    res.json({ node: newNode, role: "ADMIN" });
+  } catch (err) {
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+/** Join an existing Node via Credential */
+app.post("/api/nodes/join", async (req, res) => {
+  const { userId, code } = req.body;
+  if (!userId || !code) { res.status(400).json({ error: "userId and credential required" }); return; }
+
+  try {
+    const codeUpper = code.toUpperCase();
+    let { data: node, error: eqErr } = await supabase.from("nodes").select("*").eq("code", codeUpper).maybeSingle();
+    
+    if (!node) {
+      res.status(404).json({ error: "Invalid Credential Code" });
+      return;
+    }
+
+    // Check membership
+    const { data: membership } = await supabase.from("node_memberships")
+      .select("*").eq("node_id", node.id).eq("user_id", userId).maybeSingle();
+
+    let role = "USER";
+    if (!membership) {
+      const { error: memErr } = await supabase.from("node_memberships")
+        .insert({ node_id: node.id, user_id: userId, role });
+      if (memErr) { res.status(500).json({ error: "Failed to join Node" }); return; }
+    } else {
+      role = membership.role;
+    }
+
+    res.json({ node, role });
+  } catch (err) {
+    console.error("[node-join-error]", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+/** Get Node Data (Members & Broadcasts) */
+app.get("/api/nodes/:code", async (req, res) => {
+  try {
+    const { data: node, error: nErr } = await supabase.from("nodes").select("*").eq("code", req.params.code).single();
+    if (nErr || !node) { res.status(404).json({ error: "Node offline" }); return; }
+
+    const { data: membersRows } = await supabase.from("node_memberships")
+      .select("user_id, role, profiles!inner(username, elo)")
+      .eq("node_id", node.id);
+
+    const members = (membersRows ?? []).map((m: any) => ({
+      userId: m.user_id,
+      role: m.role,
+      username: m.profiles?.username || "Unknown Unit",
+      elo: m.profiles?.elo || 1000
+    }));
+
+    const { data: broadcastRows } = await supabase.from("broadcasts")
+      .select("id, content, created_at, profiles!inner(username)")
+      .eq("node_id", node.id)
+      .order("created_at", { ascending: false });
+
+    const broadcasts = (broadcastRows ?? []).map((b: any) => ({
+      id: b.id,
+      content: b.content,
+      createdAt: b.created_at,
+      author: b.profiles?.username || "SYSADMIN"
+    }));
+
+    res.json({ node, members, broadcasts });
+  } catch (err) {
+    console.error("[node-fetch-error]", err);
+    res.status(500).json({ error: "Failed to fetch Node data" });
+  }
+});
+
+/** Publish Broadcast (Admin Only) */
+app.post("/api/nodes/:code/broadcast", async (req, res) => {
+  const { userId, content } = req.body;
+  if (!userId || !content) { res.status(400).json({ error: "Missing fields" }); return; }
+
+  try {
+    const { data: node } = await supabase.from("nodes").select("id").eq("code", req.params.code).single();
+    if (!node) { res.status(404).json({ error: "Node offline" }); return; }
+
+    const { data: membership } = await supabase.from("node_memberships")
+      .select("role").eq("node_id", node.id).eq("user_id", userId).single();
+    
+    if (!membership || membership.role !== "ADMIN") {
+      res.status(403).json({ error: "Clearance Level Insufficient" }); return;
+    }
+
+    const { data: broadcast } = await supabase.from("broadcasts")
+      .insert({ node_id: node.id, author_id: userId, content })
+      .select("id, content, created_at, profiles!inner(username)").single();
+
+    res.json({ success: true, broadcast });
+  } catch (err) {
+    console.error("[broadcast-error]", err);
+    res.status(500).json({ error: "Failed to broadcast" });
+  }
+});
+
 app.post("/auth/register", async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: "Username and Password required" });
@@ -634,7 +694,7 @@ io.on("connection", (socket: Socket) => {
     }
 
     const playerElo = await fetchPlayerElo(userId);
-    const playerState: PlayerState = { socketId: socket.id, userId, username, elo: playerElo, codeLength: 0, code: "", language, lastUpdate: 0, updateCount: 0, windowStart: Date.now(), drawAttempts: 0, testCaseProgress: 0 };
+    const playerState: PlayerState = { socketId: socket.id, userId, username, elo: playerElo, codeLength: 0, code: "", language, lastUpdate: 0, updateCount: 0, windowStart: Date.now(), drawAttempts: 0 };
     room.players.set(userId, playerState);
     socketToRoom.set(socket.id, roomId);
     socketToUser.set(socket.id, userId);
@@ -663,9 +723,7 @@ io.on("connection", (socket: Socket) => {
       room.matchTimer = setTimeout(async () => {
         if (room.status === "active") {
           console.log(`[timer] Room ${roomId} time up — AI evaluating`);
-          room.status = "completed";
-          io.to(roomId).emit("match_end_timer");
-          // Continue with AI judging logic…
+          await evaluateAndReveal(room);
         }
       }, MATCH_DURATION);
 
@@ -767,6 +825,26 @@ io.on("connection", (socket: Socket) => {
     io.to(room.roomId).emit("chat_message", { userId, username: player.username, message: safe, timestamp: Date.now() });
   });
 
+  // HUB CHAT
+  socket.on("join_node_chat", ({ code, username }: { code: string; username: string }) => {
+    const nodeRoom = `node_${code}`;
+    socket.join(nodeRoom);
+    console.log(`[hub] ${username} joined socket channel ${nodeRoom}`);
+    // Emit purely for Live User Directory tracking in real-time, although we use DB for standard members
+    socket.to(nodeRoom).emit("node_activity", { username, status: "online" });
+  });
+
+  socket.on("node_chat_message", ({ code, username, message }: { code: string; username: string; message: string }) => {
+    const nodeRoom = `node_${code}`;
+    const safe = message.slice(0, 500).replace(/</g, "&lt;");
+    io.to(nodeRoom).emit("node_chat_message", { username, message: safe, timestamp: Date.now() });
+  });
+
+  socket.on("node_broadcast_update", ({ code }: { code: string }) => {
+    // Admin sent a broadcast via REST, now ping clients to refetch
+    io.to(`node_${code}`).emit("node_broadcast_update");
+  });
+
   // DISCONNECT
   socket.on("disconnect", () => {
     const room = getRoomBySocket(socket.id);
@@ -796,6 +874,6 @@ io.on("connection", (socket: Socket) => {
 // ── Start ──────────────────────────────────────────────────────────────────
 
 const PORT = process.env.PORT || 3001;
-httpServer.listen(PORT, () => console.log(`\n🚀 CodeWars server started → http://localhost:${PORT}\n`));
+httpServer.listen(PORT, () => console.log(`\n🚀 clashvers server started → http://localhost:${PORT}\n`));
 
 
